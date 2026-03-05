@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+set -eu
+echo "[pre-commit] Running python verify..."
+python scripts/verify_pipeline.py
+echo "[pre-commit] verify passed"
