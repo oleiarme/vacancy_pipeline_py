@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from vacancy_pipeline_py.gmail_client import GmailClient
+from vacancy_pipeline_py.scoring import score_vacancies
 from vacancy_pipeline_py.gmail_parser import (
     build_location_signals,
     filter_vacancies_by_location,
@@ -71,16 +72,7 @@ def _load_env() -> dict[str, str]:
     return out
 
 
-def _score_stub(vacancies: list[dict]) -> list[dict]:
-    out = []
-    for v in vacancies:
-        score = 70 if "senior" in str(v.get("title", "")).lower() else 62
-        row = dict(v)
-        row["score"] = score
-        row["relevant"] = score >= 60
-        row["reasoning"] = "stub-score"
-        out.append(row)
-    return out
+
 
 
 def _run_verify() -> bool:
@@ -225,7 +217,7 @@ def run(
     _write_json(MAIL_PATH, cards)
     _write_json(MERGED_PATH, cards)
 
-    scored = _score_stub(cards)
+    scored = score_vacancies(cards)
     _write_json(SCORED_PATH, scored)
 
     verification_ok = _run_verify()

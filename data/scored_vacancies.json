@@ -8,8 +8,17 @@
     "posted": "today",
     "source": "glassdoor",
     "description": "",
-    "score": 70,
-    "relevant": true,
-    "reasoning": "stub-score"
+    "score": 30,
+    "relevant": false,
+    "tags": [
+      "missing-description"
+    ],
+    "reasons": [
+      "+10 No description available (manual review required)",
+      "+15 Role title match",
+      "+5 Location match",
+      "+0 Company rating bonus"
+    ],
+    "reasoning": "+10 No description available (manual review required), +15 Role title match, +5 Location match, +0 Company rating bonus"
   }
 ]
