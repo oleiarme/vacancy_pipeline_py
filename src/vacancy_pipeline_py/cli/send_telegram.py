@@ -4,6 +4,7 @@ import argparse
 import json
 
 from vacancy_pipeline_py import paths, settings
+from vacancy_pipeline_py.cli.output import emit_json
 from vacancy_pipeline_py.telegram_sender import TelegramConfig, build_batch_text, send_telegram_text
 
 
@@ -47,7 +48,7 @@ def main() -> None:
         raise SystemExit("Error: Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID in .env")
 
     result = send_telegram_text(cfg, text=text, dry_run=not args.send)
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    emit_json(result)
 
 
 if __name__ == "__main__":

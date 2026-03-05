@@ -4,6 +4,7 @@ import argparse
 import json
 
 from vacancy_pipeline_py import paths, settings
+from vacancy_pipeline_py.cli.output import emit_json
 from vacancy_pipeline_py.supabase_sync import SupabaseConfig, sync_vacancies
 
 
@@ -39,7 +40,7 @@ def main() -> None:
         raise SystemExit("Error: Missing SUPABASE_URL or SUPABASE_KEY in .env")
 
     result = sync_vacancies(cfg, rows, dry_run=not args.send)
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    emit_json(result)
 
 
 if __name__ == "__main__":

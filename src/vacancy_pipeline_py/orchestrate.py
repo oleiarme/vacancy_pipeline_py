@@ -94,16 +94,19 @@ def _fixture_cards(signals: list[str]) -> list[dict[str, Any]]:
     return filter_vacancies_by_location(cards, signals)
 
 
-def _gmail_cards(
-    signals: list[str],
-    label_name: str,
-    query: str,
-    max_emails: int,
-) -> tuple[list[dict[str, Any]], int]:
+def _read_gmail_token() -> str:
     token = get_env("GMAIL_ACCESS_TOKEN", "").strip()
+    if token:
+        return token
 
-    token_path = paths.gmail_token_path()
-    if not token and token_path.exists():
+    token_paths = [
+        paths.gmail_token_path(),
+        paths.repo_root() / "auth" / "gmail_token.json",
+    ]
+
+    for token_path in token_paths:
+        if not token_path.exists():
+            continue
         token_json = _read_json(token_path, {})
         token = str(
             (token_json or {}).get("access_token")
@@ -111,7 +114,19 @@ def _gmail_cards(
             or ((token_json or {}).get("credentials") or {}).get("access_token")
             or ""
         ).strip()
+        if token:
+            return token
 
+    return ""
+
+
+def _gmail_cards(
+    signals: list[str],
+    label_name: str,
+    query: str,
+    max_emails: int,
+) -> tuple[list[dict[str, Any]], int]:
+    token = _read_gmail_token()
     if not token:
         raise RuntimeError("Missing Gmail access token (GMAIL_ACCESS_TOKEN or var/auth/gmail_token.json)")
 

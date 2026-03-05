@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
-import json
 
+from vacancy_pipeline_py.cli.output import emit_json
 from vacancy_pipeline_py.orchestrate import run
 
 
@@ -48,7 +48,7 @@ def main() -> None:
         gmail_max_emails=args.gmail_max_emails,
         fallback_fixture=not args.no_fallback_fixture,
     )
-    print(json.dumps(dataclasses.asdict(summary), ensure_ascii=False, indent=2))
+    emit_json(dataclasses.asdict(summary))
 
 
 if __name__ == "__main__":
