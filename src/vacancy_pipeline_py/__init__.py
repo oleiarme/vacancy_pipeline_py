@@ -1,1 +1,1 @@
-﻿__all__ = ["vacancy_utils"]
+__all__ = ["vacancy_utils"]
