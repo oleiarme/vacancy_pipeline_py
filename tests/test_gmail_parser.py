@@ -29,6 +29,20 @@ def test_filter_vacancies_by_location_uses_active_profile():
     assert kept[0]["location"] == "Lisbon"
 
 
+def test_parse_job_cards_from_react_glassdoor_email():
+    html = open("tests/fixtures/email_jobs_glassdoor_react_sample.html", "r", encoding="utf-8").read()
+    cards = parse_job_cards_from_html(html)
+    assert len(cards) == 2
+    assert cards[0]["title"] == "CI/CD Platform Engineer"
+    assert cards[0]["company"] == "Axians"
+    assert cards[0]["location"] == "Lisbon, Lisbon District"
+    assert cards[0]["posted"] == "1d"
+    assert cards[0]["id"] == "gd_1010048317758"
+    assert cards[1]["title"] == "Senior Java Engineer (Kafka)"
+    assert cards[1]["company"] == "Consulteer"
+    assert cards[1]["posted"] == "13h"
+
+
 def test_time_window_today_and_1d():
     # ????????? ????? ??? ??????????????????? ??????
     now = datetime(2026, 3, 10, 12, 0, 0, tzinfo=timezone.utc)

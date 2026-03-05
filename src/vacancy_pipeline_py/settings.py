@@ -13,7 +13,12 @@ def load_env(path: Path | None = None) -> dict[str, str]:
     if not target.exists():
         return {}
     values = dotenv_values(target)
-    return {key: value for key, value in values.items() if key and value is not None}
+    cleaned: dict[str, str] = {}
+    for key, value in values.items():
+        if not key or value is None:
+            continue
+        cleaned[key.lstrip("\ufeff")] = value
+    return cleaned
 
 
 def get_env(name: str, default: str = "", *, env_path: Path | None = None) -> str:

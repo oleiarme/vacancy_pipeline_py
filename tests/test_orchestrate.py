@@ -36,3 +36,13 @@ def test_orchestrate_generates_run_artifacts(monkeypatch):
     run_files = list(runs_dir.glob("run_*.json"))
     assert len(run_files) >= 1
 
+
+def test_orchestrate_accepts_2d_time_window(monkeypatch):
+    state_dir = _make_state_dir("orchestrate-2d")
+    monkeypatch.setenv("VACANCY_PIPELINE_STATE_DIR", str(state_dir))
+    monkeypatch.setenv("GMAIL_GLASSDOOR_TIME_WINDOW", "2d")
+
+    summary = run()
+
+    assert summary.verification_ok is True
+

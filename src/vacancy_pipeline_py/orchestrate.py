@@ -94,6 +94,54 @@ def _fixture_cards(signals: list[str]) -> list[dict[str, Any]]:
     return filter_vacancies_by_location(cards, signals)
 
 
+def _refresh_access_token_if_possible(token_path: Path, token_json: dict[str, Any]) -> str:
+    refresh_token = str(token_json.get("refresh_token") or ((token_json.get("credentials") or {}).get("refresh_token")) or "").strip()
+    if not refresh_token:
+        return ""
+
+    try:
+        from google.auth.transport.requests import Request
+        from google.oauth2.credentials import Credentials
+    except ImportError:
+        return ""
+
+    scopes = token_json.get("scopes") or ["https://www.googleapis.com/auth/gmail.readonly"]
+
+    try:
+        creds = Credentials.from_authorized_user_file(token_path, scopes)
+    except Exception:
+        try:
+            creds = Credentials.from_authorized_user_info(token_json, scopes)
+        except Exception:
+            return ""
+
+    try:
+        if not creds.valid and creds.refresh_token:
+            creds.refresh(Request())
+            refreshed_token = str(creds.token or "").strip()
+            if refreshed_token:
+                paths.ensure_parent(token_path)
+                token_path.write_text(creds.to_json(), encoding="utf-8")
+                return refreshed_token
+    except Exception:
+        return ""
+
+    return str(creds.token or "").strip()
+
+
+def _extract_access_token(token_path: Path, token_json: dict[str, Any]) -> str:
+    refreshed_token = _refresh_access_token_if_possible(token_path, token_json)
+    if refreshed_token:
+        return refreshed_token
+
+    return str(
+        (token_json or {}).get("access_token")
+        or (token_json or {}).get("token")
+        or ((token_json or {}).get("credentials") or {}).get("access_token")
+        or ""
+    ).strip()
+
+
 def _read_gmail_token() -> str:
     token = get_env("GMAIL_ACCESS_TOKEN", "").strip()
     if token:
@@ -108,12 +156,7 @@ def _read_gmail_token() -> str:
         if not token_path.exists():
             continue
         token_json = _read_json(token_path, {})
-        token = str(
-            (token_json or {}).get("access_token")
-            or (token_json or {}).get("token")
-            or ((token_json or {}).get("credentials") or {}).get("access_token")
-            or ""
-        ).strip()
+        token = _extract_access_token(token_path, token_json)
         if token:
             return token
 

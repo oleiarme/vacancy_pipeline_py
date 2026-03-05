@@ -49,10 +49,14 @@ def _vacancy_matches_signals(vacancy: dict, signals: list[str]) -> bool:
     return _text_has_signal(blob, signals)
 
 
+def _is_supported_time_window(value: str) -> bool:
+    time_window = str(value or "").strip().lower()
+    return time_window == "today" or time_window == "all" or bool(re.fullmatch(r"\d+d", time_window))
+
+
 def run_verification(*, emit_output: bool = True) -> bool:
     results = []
     time_window = settings.get_env("GMAIL_GLASSDOOR_TIME_WINDOW", "").strip().lower()
-    allowed_time_windows = {"today", "1d", "3d", "all"}
 
     config = {}
     signals: list[str] = []
@@ -77,7 +81,7 @@ def run_verification(*, emit_output: bool = True) -> bool:
     def check_time_window() -> None:
         if not time_window:
             raise RuntimeError("GMAIL_GLASSDOOR_TIME_WINDOW is empty")
-        if time_window not in allowed_time_windows:
+        if not _is_supported_time_window(time_window):
             raise RuntimeError(f"Unsupported GMAIL_GLASSDOOR_TIME_WINDOW={time_window}")
 
     def check_config_and_signals() -> None:
