@@ -2,37 +2,22 @@ from __future__ import annotations
 
 import base64
 import json
-import os
-import subprocess
-import sys
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from vacancy_pipeline_py import paths
 from vacancy_pipeline_py.gmail_client import GmailClient
-from vacancy_pipeline_py.merge import merge_vacancies
-from vacancy_pipeline_py.scoring import score_vacancies
 from vacancy_pipeline_py.gmail_parser import (
     build_location_signals,
     filter_vacancies_by_location,
     parse_job_cards_from_html,
 )
-
-ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = ROOT / "data"
-RUNS_DIR = DATA_DIR / "runs"
-FIXTURE_HTML = ROOT / "tests" / "fixtures" / "email_jobs_sample.html"
-CONFIG_PATH = ROOT / "config" / "search_config.json"
-ENV_PATH = ROOT / ".env"
-TOKEN_PATH = ROOT / "auth" / "gmail_token.json"
-
-MAIL_PATH = DATA_DIR / "vacancies_mail_glassdoor.json"
-GD_SCRAPE_PATH = DATA_DIR / "vacancies_scrape_glassdoor.json"
-LI_PATH = DATA_DIR / "vacancies_scrape_linkedin.json"
-MERGED_PATH = DATA_DIR / "vacancies.json"
-SCORED_PATH = DATA_DIR / "scored_vacancies.json"
-LAST_RUN_PATH = DATA_DIR / "last_run.json"
+from vacancy_pipeline_py.merge import merge_vacancies
+from vacancy_pipeline_py.scoring import score_vacancies
+from vacancy_pipeline_py.settings import get_env
+from vacancy_pipeline_py.verification import run_verification
 
 
 @dataclass
@@ -59,41 +44,18 @@ def _read_json(path: Path, default):
 
 
 def _write_json(path: Path, payload):
-    path.parent.mkdir(parents=True, exist_ok=True)
+    paths.ensure_parent(path)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def _load_env() -> dict[str, str]:
-    out: dict[str, str] = {}
-    if not ENV_PATH.exists():
-        return out
-    for raw in ENV_PATH.read_text(encoding="utf-8-sig").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        k, v = line.split("=", 1)
-        out[k.strip()] = v.strip()
-    return out
-
-
-
-
-
 def _run_verify() -> bool:
-    res = subprocess.run(
-        [sys.executable, "scripts/verify_pipeline.py"],
-        cwd=ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    return res.returncode == 0
+    return run_verification(emit_output=False)
 
 
 def _decode_b64url(data: str) -> str:
-    s = str(data or "").replace("-", "+").replace("_", "/")
-    s += "=" * ((4 - len(s) % 4) % 4)
-    raw = base64.b64decode(s.encode("ascii"))
+    value = str(data or "").replace("-", "+").replace("_", "/")
+    value += "=" * ((4 - len(value) % 4) % 4)
+    raw = base64.b64decode(value.encode("ascii"))
     return raw.decode("utf-8", errors="replace")
 
 
@@ -116,18 +78,18 @@ def _collect_html_parts(payload: dict[str, Any] | None, out: list[str]):
 def _dedupe_cards(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
     seen = set()
     out = []
-    for c in cards:
-        cid = str(c.get("id") or "").strip()
-        key = cid or str(c.get("link") or "").strip().lower()
+    for card in cards:
+        card_id = str(card.get("id") or "").strip()
+        key = card_id or str(card.get("link") or "").strip().lower()
         if not key or key in seen:
             continue
         seen.add(key)
-        out.append(c)
+        out.append(card)
     return out
 
 
 def _fixture_cards(signals: list[str]) -> list[dict[str, Any]]:
-    html = FIXTURE_HTML.read_text(encoding="utf-8")
+    html = paths.fixture_html_path().read_text(encoding="utf-8")
     cards = parse_job_cards_from_html(html)
     return filter_vacancies_by_location(cards, signals)
 
@@ -138,15 +100,20 @@ def _gmail_cards(
     query: str,
     max_emails: int,
 ) -> tuple[list[dict[str, Any]], int]:
-    envv = _load_env()
-    token = str(os.getenv("GMAIL_ACCESS_TOKEN") or envv.get("GMAIL_ACCESS_TOKEN") or "").strip()
+    token = get_env("GMAIL_ACCESS_TOKEN", "").strip()
 
-    if not token and TOKEN_PATH.exists():
-        token_json = _read_json(TOKEN_PATH, {})
-        token = str((token_json or {}).get("access_token") or "").strip()
+    token_path = paths.gmail_token_path()
+    if not token and token_path.exists():
+        token_json = _read_json(token_path, {})
+        token = str(
+            (token_json or {}).get("access_token")
+            or (token_json or {}).get("token")
+            or ((token_json or {}).get("credentials") or {}).get("access_token")
+            or ""
+        ).strip()
 
     if not token:
-        raise RuntimeError("Missing Gmail access token (GMAIL_ACCESS_TOKEN or auth/gmail_token.json)")
+        raise RuntimeError("Missing Gmail access token (GMAIL_ACCESS_TOKEN or var/auth/gmail_token.json)")
 
     client = GmailClient(access_token=token)
     label_id = client.find_label_id(label_name)
@@ -188,7 +155,7 @@ def run(
     run_id = started.strftime("%Y%m%dT%H%M%SZ")
     issues: list[str] = []
 
-    config = _read_json(CONFIG_PATH, {})
+    config = _read_json(paths.search_config_path(), {})
     signals = build_location_signals(config)
     if not signals:
         raise RuntimeError("config.filters.locations is empty")
@@ -209,31 +176,29 @@ def run(
                 cards = _fixture_cards(signals)
                 source_used = "fixture-fallback"
                 issues.append("gmail produced 0 cards, fallback fixture used")
-        except Exception as e:
+        except Exception as exc:
             if not fallback_fixture:
                 raise
             cards = _fixture_cards(signals)
             source_used = "fixture-fallback"
-            issues.append(f"gmail failed, fallback fixture used: {e}")
+            issues.append(f"gmail failed, fallback fixture used: {exc}")
     else:
         cards = _fixture_cards(signals)
 
-        _write_json(MAIL_PATH, cards)
-    
-    # Чтение существующих данных из других источников
-    gd_scrape_existing = _read_json(GD_SCRAPE_PATH, [])
-    li_existing = _read_json(LI_PATH, [])
+    _write_json(paths.vacancies_mail_path(), cards)
 
-    # Слияние данных (Gmail + Scrape + LinkedIn)
+    gd_scrape_existing = _read_json(paths.vacancies_scrape_glassdoor_path(), [])
+    li_existing = _read_json(paths.vacancies_scrape_linkedin_path(), [])
+
     merged, duplicates_removed = merge_vacancies(
         gd_mail=cards,
         gd_scrape=gd_scrape_existing if isinstance(gd_scrape_existing, list) else [],
         li_data=li_existing if isinstance(li_existing, list) else [],
     )
-    
-    _write_json(MERGED_PATH, merged)
+
+    _write_json(paths.merged_vacancies_path(), merged)
     scored = score_vacancies(merged)
-    _write_json(SCORED_PATH, scored)
+    _write_json(paths.scored_vacancies_path(), scored)
 
     verification_ok = _run_verify()
     if not verification_ok:
@@ -256,9 +221,8 @@ def run(
         issues=issues,
     )
 
-    run_path = RUNS_DIR / f"run_{run_id}.json"
-    _write_json(run_path, asdict(summary))
-    _write_json(LAST_RUN_PATH, asdict(summary))
+    _write_json(paths.run_summary_path(run_id), asdict(summary))
+    _write_json(paths.last_run_path(), asdict(summary))
     return summary
 
 

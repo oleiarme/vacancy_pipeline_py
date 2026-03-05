@@ -1,5 +1,16 @@
 #!/usr/bin/env sh
 set -eu
+
+if [ -x ".venv/Scripts/vacancy-verify.exe" ]; then
+  VERIFY_CMD=".venv/Scripts/vacancy-verify.exe"
+elif [ -x ".venv/bin/vacancy-verify" ]; then
+  VERIFY_CMD=".venv/bin/vacancy-verify"
+else
+  VERIFY_CMD="vacancy-verify"
+fi
+
+export GMAIL_GLASSDOOR_TIME_WINDOW="${GMAIL_GLASSDOOR_TIME_WINDOW:-today}"
+
 echo "[pre-commit] Running python verify..."
-python scripts/verify_pipeline.py
+"$VERIFY_CMD"
 echo "[pre-commit] verify passed"

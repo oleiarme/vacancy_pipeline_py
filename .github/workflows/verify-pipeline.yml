@@ -8,6 +8,8 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      GMAIL_GLASSDOOR_TIME_WINDOW: today
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -17,10 +19,13 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install dependencies
+      - name: Install package
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -e .[dev]
+
+      - name: Run tests
+        run: pytest -q
 
       - name: Run verification
-        run: python scripts/verify_pipeline.py
+        run: vacancy-verify

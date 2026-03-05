@@ -2,6 +2,17 @@
 .venv/
 venv/
 
+# Runtime state
+var/
+data/
+auth/
+.tmp-test-state/
+.tmp_pytest_cache/
+.tmp_pytest/
+.pytest-tmp/
+pytest-cache-files-*/
+*.egg-info/
+
 # Python cache
 __pycache__/
 *.pyc
@@ -19,11 +30,6 @@ htmlcov/
 .env
 .env.*
 !.env.example
-
-# Data (локальные снапшоты, не коммитить)
-data/vacancies_node_snapshot.json
-data/vacancies_python_snapshot.json
-data/dual_run_report.json
 
 # OS
 .DS_Store
