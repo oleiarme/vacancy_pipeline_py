@@ -1,0 +1,46 @@
+from vacancy_pipeline_py.merge import merge_vacancies
+
+
+def test_merge_linkedin_wins_on_collision():
+    # ????????: ???? ? ?? ?? ???????? ? Glassdoor (?? ?????) ? ? LinkedIn
+    gd_mail = [
+        {
+            "id": "gd_1",
+            "title": "DevOps Engineer",
+            "company": "Acme",
+            "link": "https://gd.example/1",
+            "source": "glassdoor",
+        }
+    ]
+    gd_scrape = []
+    li_data = [
+        {
+            "id": "li_999",
+            "title": "DevOps Engineer",
+            "company": "Acme",
+            "link": "https://li.example/999",
+            "source": "linkedin",
+            "description": "richer data",
+        }
+    ]
+
+    merged, dup = merge_vacancies(gd_mail, gd_scrape, li_data)
+    
+    # ????????: ???????? ?????? ???? ??????, ? ??? LinkedIn
+    assert len(merged) == 1
+    assert merged[0]["source"] == "linkedin"
+    assert merged[0]["id"] == "li_999"
+    assert dup >= 1
+
+
+def test_merge_keeps_distinct_records():
+    # ????????: ??? ?????? ???????? ?? ???? ?????? ??????????
+    gd_mail = [{"id": "gd_1", "title": "SRE", "company": "A", "link": "https://gd/1"}]
+    gd_scrape = [{"id": "gd_2", "title": "SRE", "company": "B", "link": "https://gd/2"}]
+    li_data = [{"id": "li_1", "title": "Platform Engineer", "company": "C", "link": "https://li/1"}]
+
+    merged, dup = merge_vacancies(gd_mail, gd_scrape, li_data)
+    
+    # ????????: ??? ?????? ?????????, ?????? ???
+    assert len(merged) == 3
+    assert dup == 0

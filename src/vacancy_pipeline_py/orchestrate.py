@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from vacancy_pipeline_py.gmail_client import GmailClient
+from vacancy_pipeline_py.merge import merge_vacancies
 from vacancy_pipeline_py.scoring import score_vacancies
 from vacancy_pipeline_py.gmail_parser import (
     build_location_signals,
@@ -27,6 +28,8 @@ ENV_PATH = ROOT / ".env"
 TOKEN_PATH = ROOT / "auth" / "gmail_token.json"
 
 MAIL_PATH = DATA_DIR / "vacancies_mail_glassdoor.json"
+GD_SCRAPE_PATH = DATA_DIR / "vacancies_scrape_glassdoor.json"
+LI_PATH = DATA_DIR / "vacancies_scrape_linkedin.json"
 MERGED_PATH = DATA_DIR / "vacancies.json"
 SCORED_PATH = DATA_DIR / "scored_vacancies.json"
 LAST_RUN_PATH = DATA_DIR / "last_run.json"
@@ -45,6 +48,7 @@ class RunSummary:
     total_scored: int
     verification_ok: bool
     matched_emails: int
+    duplicates_removed: int
     issues: list[str]
 
 
@@ -214,10 +218,21 @@ def run(
     else:
         cards = _fixture_cards(signals)
 
-    _write_json(MAIL_PATH, cards)
-    _write_json(MERGED_PATH, cards)
+        _write_json(MAIL_PATH, cards)
+    
+    # Чтение существующих данных из других источников
+    gd_scrape_existing = _read_json(GD_SCRAPE_PATH, [])
+    li_existing = _read_json(LI_PATH, [])
 
-    scored = score_vacancies(cards)
+    # Слияние данных (Gmail + Scrape + LinkedIn)
+    merged, duplicates_removed = merge_vacancies(
+        gd_mail=cards,
+        gd_scrape=gd_scrape_existing if isinstance(gd_scrape_existing, list) else [],
+        li_data=li_existing if isinstance(li_existing, list) else [],
+    )
+    
+    _write_json(MERGED_PATH, merged)
+    scored = score_vacancies(merged)
     _write_json(SCORED_PATH, scored)
 
     verification_ok = _run_verify()
@@ -233,10 +248,11 @@ def run(
         finished_at=finished.isoformat(),
         ok=verification_ok,
         total_mail=len(cards),
-        total_merged=len(cards),
+        total_merged=len(merged),
         total_scored=len(scored),
         verification_ok=verification_ok,
         matched_emails=matched_emails,
+        duplicates_removed=duplicates_removed,
         issues=issues,
     )
 
